@@ -1,0 +1,73 @@
+name: Build NixOS DigitalOcean Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "flakeのnixosConfigurationsのホスト名（例: do, hal9000）"
+        required: true
+        default: "do"
+  schedule:
+    # GitHub ActionsのcronはUTC。週1回（日曜 00:00 UTC）に実行
+    - cron: "0 0 * * 0"
+
+concurrency:
+  group: do-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nix を入れる（Determinate Systems）
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+
+      # CIキャッシュ（Magic Nix Cache）
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+        with:
+          # FlakeHub連携が不要なら false にすると権限まわりがシンプル
+          use-flakehub: false
+
+      - name: Build DigitalOcean image
+        env:
+          HOST: ${{ inputs.host }}
+        run: |
+          set -euxo pipefail
+          nix --version
+          nix build -L --accept-flake-config ".#nixosConfigurations.${HOST}.config.system.build.digitalOceanImage"
+          echo "Build output:"
+          ls -lah result
+
+      - name: Locate image file
+        id: out
+        run: |
+          set -euxo pipefail
+          OUT="$(readlink -f result)"
+          # result がディレクトリでもファイルでも拾えるようにする
+          if [ -d "$OUT" ]; then
+            IMG="$(find "$OUT" -maxdepth 1 -type f -name '*.qcow2*' -print -quit || true)"
+          else
+            IMG="$OUT"
+          fi
+          if [ -z "${IMG:-}" ] || [ ! -f "$IMG" ]; then
+            echo "No qcow2 image found under: $OUT"
+            exit 1
+          fi
+          echo "image_path=$IMG" >> "$GITHUB_OUTPUT"
+          echo "Found image: $IMG"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nixos-digitalocean-${{ inputs.host }}-${{ github.run_number }}
+          path: ${{ steps.out.outputs.image_path }}
+          if-no-files-found: error
+          retention-days: 14
