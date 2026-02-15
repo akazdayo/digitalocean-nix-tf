@@ -33,7 +33,7 @@ tofu output droplet_ip
 `flake.nix` の `deploy.nodes.droplet.hostname` を実際のIPアドレスに書き換えて:
 
 ```bash
-nix run github:serokell/deploy-rs -- .#droplet
+deploy
 ```
 
 ## 構成
