@@ -19,8 +19,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -71,3 +70,16 @@ jobs:
           path: ${{ steps.out.outputs.image_path }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.out.outputs.image_path }}
+          body: |
+            ## NixOS DigitalOcean Image
+            
+            **Host:** `${{ inputs.host || 'do' }}`
+            **Run:** ${{ github.run_number }}
+            **Commit:** ${{ github.sha }}
+          draft: false
+          prerelease: false
