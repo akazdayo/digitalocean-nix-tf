@@ -112,6 +112,7 @@
           };
         };
 
+        # nix run .#deploy
         apps.deploy = {
           type = "app";
           program = toString (
